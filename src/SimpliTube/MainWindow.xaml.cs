@@ -22,11 +22,13 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.ServiceModel.Syndication;
 using System.Text;
-using System.Threading;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Xml;
 
@@ -51,6 +53,11 @@ namespace SimpliTube
 		/// </summary>
 		private string youtubeDLPath = @".\Dependencies\youtube-dl.exe";
 
+		/// <summary>
+		/// Path for FFmpeg
+		/// </summary>
+		private string ffmpegPath = @".\Dependencies\ffmpeg.exe";
+
 		#endregion
 
 		#region Constructor
@@ -66,9 +73,9 @@ namespace SimpliTube
 
 		#region Event Handlers
 
-		private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+		private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
 		{
-			CheckAndUpdateDependencies();
+			await CheckAndUpdateDependencies();
 		}
 
 		#endregion
@@ -78,7 +85,7 @@ namespace SimpliTube
 		/// <summary>
 		/// Checks if the required dependencies exist and downloads or updates them
 		/// </summary>
-		private void CheckAndUpdateDependencies()
+		private async Task CheckAndUpdateDependencies()
 		{
 			// Make sure the folder exists
 			if (!Directory.Exists(dependenciesPath))
@@ -86,25 +93,48 @@ namespace SimpliTube
 				Directory.CreateDirectory(dependenciesPath);
 			}
 
-			// Youtube-DL
-			string latestYoutubeDLLocal = GetLatestYoutubeDLLocalVersion();
-			string latestYoutubeDLRelease = GetLatestYoutubeDLReleaseVersion();
-
-			if (string.IsNullOrEmpty(latestYoutubeDLLocal) || (!latestYoutubeDLLocal.Equals(latestYoutubeDLRelease) && !string.IsNullOrEmpty(latestYoutubeDLRelease)))
+			// Check and update Youtube-DL
+			Task yt = Task.Run(async () =>
 			{
-				DownloadYoutubeDL(latestYoutubeDLRelease);
-			}
+				Task<string> yt1 = Task.Run(() => GetLatestYoutubeDLLocalVersion());
+				Task<string> yt2 = Task.Run(() => GetLatestYoutubeDLReleaseVersion());
+
+				string[] versions = await Task.WhenAll(yt1, yt2);
+
+				if (string.IsNullOrEmpty(versions[0]) || (!string.IsNullOrEmpty(versions[1]) && !versions[0].Equals(versions[1])))
+				{
+					await DownloadYoutubeDL(versions[1]);
+				}
+			});
+
+			// Check and update FFmpeg
+			Task ff = Task.Run(async () =>
+			{
+				Task<string> ff1 = Task.Run(() => GetLatestFFmpegLocalVersion());
+				Task<string> ff2 = Task.Run(() => GetLatestFFmpegNightlyVersion());
+
+				string[] versions = await Task.WhenAll(ff1, ff2);
+
+				if (string.IsNullOrEmpty(versions[0]) || (!string.IsNullOrEmpty(versions[1]) && !versions[0].Contains(versions[1].Split(new char[] { '-' })[1])))
+				{
+					await DownloadFFmpeg(versions[1]);
+				}
+			});
+
+			await Task.WhenAll(yt, ff);
 		}
 
 		/// <summary>
 		/// Gets the existing version of Youtube-DL
 		/// </summary>
 		/// <returns></returns>
-		private string GetLatestYoutubeDLLocalVersion()
+		private async Task<string> GetLatestYoutubeDLLocalVersion()
 		{
 			if (File.Exists(youtubeDLPath))
 			{
-				return ExecuteProcess(youtubeDLPath, "--version").ToString().Trim();
+				StringBuilder output = await ExecuteProcess(youtubeDLPath, "--version");
+
+				return output.ToString().Trim();
 			}
 
 			return string.Empty;
@@ -114,44 +144,10 @@ namespace SimpliTube
 		/// Gets the latest released version of Youtube-DL
 		/// </summary>
 		/// <returns></returns>
-		private string GetLatestYoutubeDLReleaseVersion()
+		private Task<string> GetLatestYoutubeDLReleaseVersion()
 		{
 			string url = @"https://github.com/rg3/youtube-dl/releases.atom";
 
-			SyndicationFeed feed = GetFeed(url);
-
-			if (feed != null)
-			{
-				SyndicationItem latestEntry = feed.Items.OrderByDescending(i => i.LastUpdatedTime).FirstOrDefault();
-
-				return latestEntry.Title.Text.Split(new char[] { ' ' })[1];
-			}
-
-			return string.Empty;
-		}
-
-		/// <summary>
-		/// Downloads the latest released version of Youtube-DL
-		/// </summary>
-		/// <param name="version"></param>
-		private void DownloadYoutubeDL(string version)
-		{
-			string url = @"https://github.com/rg3/youtube-dl/releases/download/" + version + @"/youtube-dl.exe";
-
-			using (WebClient client = new WebClient())
-			{
-				// TODO: Change this to async to not block the UI and find a way to either show progress or a wait panel.
-				client.DownloadFile(url, youtubeDLPath);
-			}
-		}
-
-		/// <summary>
-		/// Loads a RSS feed
-		/// </summary>
-		/// <param name="url"></param>
-		/// <returns></returns>
-		private SyndicationFeed GetFeed(string url)
-		{
 			SyndicationFeed feed = null;
 
 			using (XmlReader reader = XmlReader.Create(url))
@@ -159,7 +155,88 @@ namespace SimpliTube
 				feed = SyndicationFeed.Load(reader);
 			}
 
-			return feed;
+			return feed != null ? Task.FromResult(feed.Items.OrderByDescending(i => i.LastUpdatedTime).FirstOrDefault().Title.Text.Split(new char[] { ' ' })[1]) : Task.FromResult(string.Empty);
+		}
+
+		/// <summary>
+		/// Downloads the latest released version of Youtube-DL
+		/// </summary>
+		/// <param name="version"></param>
+		private async Task DownloadYoutubeDL(string version)
+		{
+			string fileName = @"/youtube-dl.exe";
+			string url = @"https://github.com/rg3/youtube-dl/releases/download/" + version + fileName;
+
+			using (WebClient client = new WebClient())
+			{
+				await client.DownloadFileTaskAsync(url, dependenciesPath + fileName);
+			}
+		}
+
+		/// <summary>
+		/// Gets the existing version of FFmpeg
+		/// </summary>
+		/// <returns></returns>
+		private async Task<string> GetLatestFFmpegLocalVersion()
+		{
+			if (File.Exists(ffmpegPath))
+			{
+				StringBuilder output = await ExecuteProcess(ffmpegPath, "-version");
+				string fullVersion = output.ToString().Substring(15);
+
+				return fullVersion.Substring(0, fullVersion.IndexOf(" Copyright (c)")).Trim();
+			}
+
+			return string.Empty;
+		}
+
+		/// <summary>
+		/// Gets the latest nightly version of FFmpeg
+		/// </summary>
+		/// <returns></returns>
+		private async Task<string> GetLatestFFmpegNightlyVersion()
+		{
+			string url = @"https://ffmpeg.zeranoe.com/builds/";
+
+			using (WebClient client = new WebClient())
+			{
+				using (StreamReader reader = new StreamReader(client.OpenRead(url)))
+				{
+					string pageContent = await reader.ReadToEndAsync();
+
+					Regex regex = new Regex("(\\<input.*name=\"v\").*(value=\".*\")");
+					Match match = regex.Match(pageContent);
+
+					if (match.Success)
+					{
+						return match.Groups[2].Value.Substring(7, match.Groups[2].Value.Length - 8);
+					}
+				}
+			}
+
+			return string.Empty;
+		}
+
+		/// <summary>
+		/// Downloads the latest released version of FFmpeg
+		/// </summary>
+		/// <param name="version"></param>
+		private async Task DownloadFFmpeg(string version)
+		{
+			string arch = systemArchitecture == "x86_64" ? "win64" : "win32";
+			string fileName = @"/ffmpeg-" + version + "-" + arch + @"-static.zip";
+			string url = @"https://ffmpeg.zeranoe.com/builds/" + arch + @"/static" + fileName;
+
+			using (WebClient client = new WebClient())
+			{
+				await client.DownloadFileTaskAsync(url, dependenciesPath + fileName);
+			}
+
+			ZipFile.ExtractToDirectory(dependenciesPath + fileName, dependenciesPath);
+			File.Delete(dependenciesPath + fileName);
+
+			File.Copy(dependenciesPath + fileName.Substring(0, fileName.Length - 4) + @"/bin/ffmpeg.exe", dependenciesPath + @"/ffmpeg.exe", true);
+			Directory.Delete(dependenciesPath + fileName.Substring(0, fileName.Length - 4), true);
 		}
 
 		/// <summary>
@@ -168,49 +245,43 @@ namespace SimpliTube
 		/// <param name="path"></param>
 		/// <param name="arguments"></param>
 		/// <returns></returns>
-		private StringBuilder ExecuteProcess(string path, string arguments)
+		private async Task<StringBuilder> ExecuteProcess(string path, string arguments)
 		{
-			// Uses code adapted from https://stackoverflow.com/questions/139593/processstartinfo-hanging-on-waitforexit-why
+			TaskCompletionSource<StringBuilder> tcsProcess = new TaskCompletionSource<StringBuilder>();
+			TaskCompletionSource<StringBuilder> tcsOutput = new TaskCompletionSource<StringBuilder>();
 			StringBuilder output = new StringBuilder();
 
-			using (AutoResetEvent outputWaitHandle = new AutoResetEvent(false))
+			using (Process process = new Process())
 			{
-				using (Process process = new Process())
+				process.StartInfo.FileName = path;
+				process.StartInfo.Arguments = arguments;
+				process.StartInfo.UseShellExecute = false;
+				process.StartInfo.RedirectStandardOutput = true;
+				process.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
+				process.StartInfo.CreateNoWindow = true;
+
+				process.OutputDataReceived += (sender, e) =>
 				{
-					process.StartInfo.FileName = path;
-					process.StartInfo.Arguments = arguments;
-					process.StartInfo.UseShellExecute = false;
-					process.StartInfo.RedirectStandardOutput = true;
-					process.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
-					process.StartInfo.CreateNoWindow = true;
-					process.OutputDataReceived += (sender, e) =>
+					if (e.Data == null)
 					{
-						if (e.Data == null)
-						{
-							outputWaitHandle.Set();
-						}
-						else
-						{
-							output.AppendLine(e.Data);
-						}
-					};
-
-					try
-					{
-						process.Start();
-
-						process.BeginOutputReadLine();
-
-						process.WaitForExit();
+						tcsOutput.SetResult(output);
 					}
-					finally
+					else
 					{
-						outputWaitHandle.WaitOne();
+						output.AppendLine(e.Data);
 					}
-				}
+				};
+
+				process.Exited += async (sender, e) =>
+				{
+					tcsProcess.TrySetResult(await tcsOutput.Task);
+				};
+
+				process.Start();
+				process.BeginOutputReadLine();
+
+				return await tcsProcess.Task;
 			}
-
-			return output;
 		}
 
 		#endregion

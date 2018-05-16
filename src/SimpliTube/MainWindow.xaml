@@ -37,6 +37,7 @@
 				<MenuItem Header="_Exit" />
 			</MenuItem>-->
 		</Menu>
-
+		
+		<StatusBar DockPanel.Dock="Bottom" />
 	</DockPanel>
 </Window>

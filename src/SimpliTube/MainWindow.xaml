@@ -20,24 +20,29 @@
 -->
 
 <Window x:Class="SimpliTube.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:SimpliTube"
-        mc:Ignorable="d"
-        Title="SimpliTube" Width="1280" Height="800">
+		xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+		xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+		xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+		xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+		xmlns:local="clr-namespace:SimpliTube"
+		mc:Ignorable="d"
+		Title="SimpliTube" Width="1280" Height="800">
 	<DockPanel HorizontalAlignment="Stretch" VerticalAlignment="Stretch" LastChildFill="True">
 		<Menu DockPanel.Dock="Top">
-			<!--<MenuItem Header="_File">
-				<MenuItem Header="_New" />
-				<MenuItem Header="_Open" />
-				<MenuItem Header="_Save" />
+			<MenuItem Header="_File">
+				<MenuItem Header="_Add" />
 				<Separator />
 				<MenuItem Header="_Exit" />
-			</MenuItem>-->
+			</MenuItem>
+			<MenuItem Header="_Help">
+			</MenuItem>
 		</Menu>
-		
-		<StatusBar DockPanel.Dock="Bottom" />
+
+		<StackPanel Orientation="Vertical" >
+
+			<RichTextBox Name="txtOutput" MinHeight="200" IsReadOnly="True" AcceptsReturn="True"
+						 VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Disabled">
+			</RichTextBox>
+		</StackPanel>
 	</DockPanel>
 </Window>

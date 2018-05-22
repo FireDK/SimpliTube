@@ -20,17 +20,9 @@
 */
 
 using System;
-using System.Diagnostics;
 using System.IO;
-using System.IO.Compression;
-using System.Linq;
-using System.Net;
-using System.ServiceModel.Syndication;
-using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Xml;
 
 namespace SimpliTube
 {
@@ -65,221 +57,32 @@ namespace SimpliTube
 
 		private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
 		{
+			// Make sure the work directory exists
+			if (!Directory.Exists(workPath))
+			{
+				Directory.CreateDirectory(workPath);
+			}
+
 			OutputManager outputManager = new OutputManager(Dispatcher, txtOutput);
 			Progress<OutputMessage> progressIndicator = new Progress<OutputMessage>(outputManager.Append);
+			YoutubeDLManager youtubeDLManager = new YoutubeDLManager(systemArchitecture, workPath, progressIndicator);
+			FFmpegManager ffmpegManager = new FFmpegManager(systemArchitecture, workPath, progressIndicator);
 
-			await CheckAndUpdateDependencies(progressIndicator).ConfigureAwait(false);
+			outputManager.Append(new OutputMessage() { Text = "Checking for updates..." });
+
+			await Task.WhenAll(
+				youtubeDLManager.CheckForUpdates(),
+				ffmpegManager.CheckForUpdates()
+			);
+
+			outputManager.Append(new OutputMessage() { Text = "Finished checking for updates." + Environment.NewLine });
 		}
 
 		#endregion
 
 		#region Private Methods
 
-		/// <summary>
-		/// Checks if the required dependencies exist and downloads or updates them
-		/// </summary>
-		/// <param name="progress"></param>
-		private async Task CheckAndUpdateDependencies(IProgress<OutputMessage> progress)
-		{
-			// Make sure the folder exists
-			if (!Directory.Exists(workPath))
-			{
-				Directory.CreateDirectory(workPath);
 
-				progress.Report(new OutputMessage() { Text = "Created work directory." });
-			}
-			else
-			{
-				progress.Report(new OutputMessage() { Text = "Work directory found." });
-			}
-
-			// Check and update Youtube-DL
-			Task yt = Task.Run(async () =>
-			{
-				string[] versions = await Task.WhenAll(GetLatestYoutubeDLLocalVersion(), GetLatestYoutubeDLReleaseVersion()).ConfigureAwait(false);
-
-				if (string.IsNullOrEmpty(versions[0]) || (!string.IsNullOrEmpty(versions[1]) && !versions[0].Equals(versions[1])))
-				{
-					await DownloadYoutubeDL(versions[1]).ConfigureAwait(false);
-				}
-			});
-
-			// Check and update FFmpeg
-			Task ff = Task.Run(async () =>
-			{
-				string[] versions = await Task.WhenAll(GetLatestFFmpegLocalVersion(), GetLatestFFmpegNightlyVersion()).ConfigureAwait(false);
-
-				if (string.IsNullOrEmpty(versions[0]) || (!string.IsNullOrEmpty(versions[1]) && !versions[0].Contains(versions[1].Split(new char[] { '-' })[1])))
-				{
-					await DownloadFFmpeg(versions[1]).ConfigureAwait(false);
-				}
-			});
-
-			await Task.WhenAll(yt, ff).ConfigureAwait(false);
-		}
-
-		/// <summary>
-		/// Gets the existing version of Youtube-DL
-		/// </summary>
-		/// <returns></returns>
-		private async Task<string> GetLatestYoutubeDLLocalVersion()
-		{
-			string path = Path.Combine(workPath, "youtube-dl.exe");
-
-			if (File.Exists(path))
-			{
-				StringBuilder output = await ExecuteProcess(path, "--version").ConfigureAwait(false);
-				return output.ToString().Trim();
-			}
-
-			return string.Empty;
-		}
-
-		/// <summary>
-		/// Gets the latest released version of Youtube-DL
-		/// </summary>
-		/// <returns></returns>
-		private Task<string> GetLatestYoutubeDLReleaseVersion()
-		{
-			const string url = "https://github.com/rg3/youtube-dl/releases.atom";
-
-			SyndicationFeed feed = null;
-
-			using (XmlReader reader = XmlReader.Create(url))
-			{
-				feed = SyndicationFeed.Load(reader);
-			}
-
-			return feed == null ? Task.FromResult(string.Empty) :
-				Task.FromResult(feed.Items.OrderByDescending(i => i.LastUpdatedTime).First().Title.Text.Split(new char[] { ' ' })[1]);
-		}
-
-		/// <summary>
-		/// Downloads the latest released version of Youtube-DL
-		/// </summary>
-		/// <param name="version"></param>
-		private async Task DownloadYoutubeDL(string version)
-		{
-			string url = "https://github.com/rg3/youtube-dl/releases/download/" + version + "/youtube-dl.exe";
-			string path = Path.Combine(workPath, "youtube-dl.exe");
-
-			using (WebClient client = new WebClient())
-			{
-				await client.DownloadFileTaskAsync(url, path).ConfigureAwait(false);
-			}
-		}
-
-		/// <summary>
-		/// Gets the existing version of FFmpeg
-		/// </summary>
-		/// <returns></returns>
-		private async Task<string> GetLatestFFmpegLocalVersion()
-		{
-			string path = Path.Combine(workPath, "ffmpeg.exe");
-
-			if (File.Exists(path))
-			{
-				StringBuilder output = await ExecuteProcess(path, "-version").ConfigureAwait(false);
-				string fullVersion = output.ToString().Substring(15);
-				return fullVersion.Substring(0, fullVersion.IndexOf(" Copyright (c)")).Trim();
-			}
-
-			return string.Empty;
-		}
-
-		/// <summary>
-		/// Gets the latest nightly version of FFmpeg
-		/// </summary>
-		/// <returns></returns>
-		private async Task<string> GetLatestFFmpegNightlyVersion()
-		{
-			const string url = "https://ffmpeg.zeranoe.com/builds/";
-
-			using (WebClient client = new WebClient())
-			{
-				using (StreamReader reader = new StreamReader(client.OpenRead(url)))
-				{
-					string pageContent = await reader.ReadToEndAsync().ConfigureAwait(false);
-
-					Regex regex = new Regex("(\\<input.*name=\"v\").*(value=\".*\")");
-					Match match = regex.Match(pageContent);
-
-					if (match.Success)
-					{
-						return match.Groups[2].Value.Substring(7, match.Groups[2].Value.Length - 8);
-					}
-				}
-			}
-
-			return string.Empty;
-		}
-
-		/// <summary>
-		/// Downloads the latest released version of FFmpeg
-		/// </summary>
-		/// <param name="version"></param>
-		private async Task DownloadFFmpeg(string version)
-		{
-			string fileName = "ffmpeg-" + version + "-" + systemArchitecture + "-static";
-			string url = "https://ffmpeg.zeranoe.com/builds/" + systemArchitecture + "/static/" + fileName + ".zip";
-			string zipPath = workPath + "/" + fileName + ".zip";
-
-			using (WebClient client = new WebClient())
-			{
-				await client.DownloadFileTaskAsync(url, zipPath).ConfigureAwait(false);
-			}
-
-			ZipFile.ExtractToDirectory(zipPath, workPath);
-			File.Delete(zipPath);
-
-			File.Copy(workPath + "/" + fileName + "/bin/ffmpeg.exe", workPath + "/ffmpeg.exe", true);
-			Directory.Delete(workPath + "/" + fileName, true);
-		}
-
-		/// <summary>
-		/// Executes a process in the background and returns it's output
-		/// </summary>
-		/// <param name="path"></param>
-		/// <param name="arguments"></param>
-		/// <returns></returns>
-		private async Task<StringBuilder> ExecuteProcess(string path, string arguments)
-		{
-			TaskCompletionSource<StringBuilder> tcsProcess = new TaskCompletionSource<StringBuilder>();
-			TaskCompletionSource<StringBuilder> tcsOutput = new TaskCompletionSource<StringBuilder>();
-			StringBuilder output = new StringBuilder();
-
-			using (Process process = new Process())
-			{
-				process.StartInfo.FileName = path;
-				process.StartInfo.Arguments = arguments;
-				process.StartInfo.UseShellExecute = false;
-				process.StartInfo.RedirectStandardOutput = true;
-				process.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
-				process.StartInfo.CreateNoWindow = true;
-
-				process.OutputDataReceived += (sender, e) =>
-				{
-					if (e.Data == null)
-					{
-						tcsOutput.SetResult(output);
-					}
-					else
-					{
-						output.AppendLine(e.Data);
-					}
-				};
-
-				process.Exited += async (sender, e) =>
-				{
-					tcsProcess.TrySetResult(await tcsOutput.Task);
-				};
-
-				process.Start();
-				process.BeginOutputReadLine();
-
-				return await tcsProcess.Task;
-			}
-		}
 
 		#endregion
 	}

@@ -56,8 +56,7 @@ namespace SimpliTube
 		{
 			dispatcherRef.BeginInvoke((Action)(() =>
 			{
-				textBoxRef.AppendText(message.Text);
-				textBoxRef.AppendText(Environment.NewLine);
+				textBoxRef.AppendText(string.Format("{0:[HH:mm:ss] }", DateTime.Now) + message.Text + Environment.NewLine);
 			}));
 		}
 

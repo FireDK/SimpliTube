@@ -42,6 +42,11 @@
 
 			<RichTextBox Name="txtOutput" MinHeight="200" IsReadOnly="True" AcceptsReturn="True"
 						 VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Disabled">
+				<RichTextBox.Resources>
+					<Style TargetType="{x:Type Paragraph}">
+						<Setter Property="Margin" Value="0" />
+					</Style>
+				</RichTextBox.Resources>
 			</RichTextBox>
 		</StackPanel>
 	</DockPanel>

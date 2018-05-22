@@ -76,6 +76,9 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ManagerBase.cs" />
+    <Compile Include="FFmpegManager.cs" />
+    <Compile Include="YoutubeDLManager.cs" />
     <Compile Include="OutputManager.cs" />
     <Compile Include="Properties\AssemblyInfo.cs">
       <SubType>Code</SubType>

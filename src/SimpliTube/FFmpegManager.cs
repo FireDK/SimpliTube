@@ -21,10 +21,10 @@
 
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Net;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
@@ -83,8 +83,8 @@ namespace SimpliTube
 
 			if (File.Exists(path))
 			{
-				StringBuilder output = await ExecuteProcess(path, "-version");
-				string fullVersion = output.ToString().Substring(15);
+				List<string> output = await ExecuteProcess(path, "-version");
+				string fullVersion = output[0].Substring(15);
 				return fullVersion.Substring(0, fullVersion.IndexOf(" Copyright (c)")).Trim();
 			}
 

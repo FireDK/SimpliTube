@@ -27,6 +27,19 @@
 		xmlns:local="clr-namespace:SimpliTube"
 		mc:Ignorable="d"
 		Title="SimpliTube" Width="1280" Height="800">
+	<Window.Resources>
+		<DataTemplate x:Key="CheckBoxCell">
+			<StackPanel Orientation="Horizontal">
+				<CheckBox IsChecked="{Binding Path=IsSelected, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type ListViewItem}}}"/>
+			</StackPanel>
+		</DataTemplate>
+
+		<Style TargetType="{x:Type GridViewColumnHeader}">
+			<Setter Property="HorizontalContentAlignment" Value="Left" />
+			<Setter Property="IsHitTestVisible" Value="False" />
+		</Style>
+	</Window.Resources>
+
 	<DockPanel HorizontalAlignment="Stretch" VerticalAlignment="Stretch" LastChildFill="True">
 		<Menu DockPanel.Dock="Top">
 			<MenuItem Header="_File">
@@ -38,9 +51,57 @@
 			</MenuItem>
 		</Menu>
 
-		<StackPanel Orientation="Vertical" >
+		<Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="10, 0, 10, 10">
+			<Grid.RowDefinitions>
+				<RowDefinition Height="Auto"></RowDefinition>
+				<RowDefinition Height="*"></RowDefinition>
+				<RowDefinition Height="Auto"></RowDefinition>
+			</Grid.RowDefinitions>
 
-			<RichTextBox Name="txtOutput" MinHeight="200" IsReadOnly="True" AcceptsReturn="True"
+			<GroupBox Name="grpInput" Grid.Row="0">
+				<GroupBox.Header>
+					<Label>Input</Label>
+				</GroupBox.Header>
+
+				<Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+					<Grid.RowDefinitions>
+						<RowDefinition Height="Auto"></RowDefinition>
+						<RowDefinition Height="Auto"></RowDefinition>
+						<RowDefinition Height="Auto"></RowDefinition>
+					</Grid.RowDefinitions>
+					<Grid.ColumnDefinitions>
+						<ColumnDefinition Width="*"></ColumnDefinition>
+						<ColumnDefinition Width="Auto"></ColumnDefinition>
+					</Grid.ColumnDefinitions>
+
+					<TextBox Name="txtInput" Grid.Row="0" Grid.Column="0" Margin="0, 0, 10, 10"></TextBox>
+					<Button Name="btnLoadFormats" Grid.Row="0" Grid.Column="1" Width="150" Margin="0, 0, 0, 10"
+							Click="btnLoadFormats_Click">Load Formats</Button>
+
+					<ListView Name="lstFormats" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0, 0, 0, 10" Height="200" SelectionMode="Multiple" ScrollViewer.VerticalScrollBarVisibility="Visible"
+							  SizeChanged="lstFormats_SizeChanged">
+						<ListView.View>
+							<GridView AllowsColumnReorder="False">
+								<GridViewColumn CellTemplate="{StaticResource CheckBoxCell}" Width="30" />
+								<GridViewColumn Header=" Format Code" Width="100" DisplayMemberBinding="{Binding FormatCode}" />
+								<GridViewColumn Header=" Extension" Width="100" DisplayMemberBinding="{Binding Extension}" />
+								<GridViewColumn Header=" Resolution" Width="100" DisplayMemberBinding="{Binding Resolution}" />
+								<GridViewColumn Header=" Note" Width="500" DisplayMemberBinding="{Binding Note}" />
+							</GridView>
+						</ListView.View>
+					</ListView>
+
+					<TextBox Name="txtOutputDir" Grid.Row="2" Grid.Column="0" Margin="0, 0, 10, 0"></TextBox>
+					<Button Name="btnDownload" Grid.Row="2" Grid.Column="1" Width="150" Margin="0, 0, 0, 0"
+							Click="btnDownload_Click">Download Selected</Button>
+				</Grid>
+			</GroupBox>
+
+			<DataGrid Name="grdWorkload" Grid.Row="1" Margin="0, 10, 0, 10">
+
+			</DataGrid>
+
+			<RichTextBox Name="txtOutput" Height="200" IsReadOnly="True" AcceptsReturn="True" Grid.Row="2"
 						 VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Disabled">
 				<RichTextBox.Resources>
 					<Style TargetType="{x:Type Paragraph}">
@@ -48,6 +109,6 @@
 					</Style>
 				</RichTextBox.Resources>
 			</RichTextBox>
-		</StackPanel>
+		</Grid>
 	</DockPanel>
 </Window>

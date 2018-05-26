@@ -21,21 +21,30 @@
 
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.ServiceModel.Syndication;
-using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Xml;
 
 namespace SimpliTube
 {
+	public class YoutubeDLFormat
+	{
+		public string FormatCode { get; set; }
+		public string Extension { get; set; }
+		public string Resolution { get; set; }
+		public string Note { get; set; }
+	}
+
 	public class YoutubeDLManager : ManagerBase
 	{
 		#region Fields and Properties
 
-
+		private readonly string defaultOptions = "--ignore-config --no-color ";
 
 		#endregion
 
@@ -70,6 +79,53 @@ namespace SimpliTube
 			});
 		}
 
+		public async Task<List<YoutubeDLFormat>> GetFormats(string url)
+		{
+			string path = Path.Combine(workPath, "youtube-dl.exe");
+			List<YoutubeDLFormat> result = new List<YoutubeDLFormat>();
+
+			if (File.Exists(path))
+			{
+				List<string> output = await ExecuteProcess(path, defaultOptions + "--list-formats " + url);
+				int index = output.FindIndex(i => i.StartsWith("format code")) + 1;
+
+				for (int i = index; i < output.Count; i++)
+				{
+					Regex regex = new Regex(@"^([\w-]*)\s*([\w-]*)\s*(audio only|[\w-]*)\s*(.*)$"); // Let's hope this works correctly
+					Match match = regex.Match(output[i]);
+
+					if (match.Success)
+					{
+						result.Add(new YoutubeDLFormat()
+						{
+							FormatCode = match.Groups[1].ToString(),
+							Extension = match.Groups[2].ToString(),
+							Resolution = match.Groups[3].ToString(),
+							Note = match.Groups[4].ToString()
+						});
+					}
+				}
+			}
+
+			return result;
+		}
+
+		public async Task Download(string url, string outputDir, List<YoutubeDLFormat> formats)
+		{
+			string path = Path.Combine(workPath, "youtube-dl.exe");
+
+			if (File.Exists(path))
+			{
+				foreach (YoutubeDLFormat format in formats)
+				{
+					List<string> output = await ExecuteProcess(path, defaultOptions + "--format " + format.FormatCode +
+						" --output \"" + outputDir + "/%(title)s.%(ext)s\" --restrict-filenames " + url);
+
+					progressIndicator.Report(new OutputMessage() { Text = string.Join(Environment.NewLine, output) });
+				}
+			}
+		}
+
 		#endregion
 
 		#region Private Methods
@@ -84,8 +140,8 @@ namespace SimpliTube
 
 			if (File.Exists(path))
 			{
-				StringBuilder output = await ExecuteProcess(path, "--version");
-				return output.ToString().Trim();
+				List<string> output = await ExecuteProcess(path, defaultOptions + "--version");
+				return output[0].Trim();
 			}
 
 			return string.Empty;

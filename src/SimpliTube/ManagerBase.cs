@@ -20,8 +20,8 @@
 */
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace SimpliTube
@@ -63,11 +63,11 @@ namespace SimpliTube
 		/// <param name="path"></param>
 		/// <param name="arguments"></param>
 		/// <returns></returns>
-		protected async Task<StringBuilder> ExecuteProcess(string path, string arguments)
+		protected async Task<List<string>> ExecuteProcess(string path, string arguments)
 		{
-			TaskCompletionSource<StringBuilder> tcsProcess = new TaskCompletionSource<StringBuilder>();
-			TaskCompletionSource<StringBuilder> tcsOutput = new TaskCompletionSource<StringBuilder>();
-			StringBuilder output = new StringBuilder();
+			TaskCompletionSource<List<string>> tcsProcess = new TaskCompletionSource<List<string>>();
+			TaskCompletionSource<List<string>> tcsOutput = new TaskCompletionSource<List<string>>();
+			List<string> output = new List<string>();
 
 			using (Process process = new Process())
 			{
@@ -87,7 +87,7 @@ namespace SimpliTube
 					}
 					else
 					{
-						output.AppendLine(e.Data);
+						output.Add(e.Data);
 					}
 				};
 

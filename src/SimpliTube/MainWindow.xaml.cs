@@ -20,9 +20,11 @@
 */
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
 
 namespace SimpliTube
 {
@@ -39,6 +41,12 @@ namespace SimpliTube
 		/// Path to the work directory
 		/// </summary>
 		private readonly string workPath = @".\work";
+
+		private OutputManager outputManager;
+		private Progress<OutputMessage> progressIndicator;
+
+		private YoutubeDLManager youtubeDLManager;
+		private FFmpegManager ffmpegManager;
 
 		#endregion
 
@@ -63,10 +71,11 @@ namespace SimpliTube
 				Directory.CreateDirectory(workPath);
 			}
 
-			OutputManager outputManager = new OutputManager(Dispatcher, txtOutput);
-			Progress<OutputMessage> progressIndicator = new Progress<OutputMessage>(outputManager.Append);
-			YoutubeDLManager youtubeDLManager = new YoutubeDLManager(systemArchitecture, workPath, progressIndicator);
-			FFmpegManager ffmpegManager = new FFmpegManager(systemArchitecture, workPath, progressIndicator);
+			outputManager = new OutputManager(Dispatcher, txtOutput);
+			progressIndicator = new Progress<OutputMessage>(outputManager.Append);
+
+			youtubeDLManager = new YoutubeDLManager(systemArchitecture, workPath, progressIndicator);
+			ffmpegManager = new FFmpegManager(systemArchitecture, workPath, progressIndicator);
 
 			outputManager.Append(new OutputMessage() { Text = "Checking for updates..." });
 
@@ -76,6 +85,48 @@ namespace SimpliTube
 			);
 
 			outputManager.Append(new OutputMessage() { Text = "Finished checking for updates." + Environment.NewLine });
+		}
+
+		private void lstFormats_SizeChanged(object sender, SizeChangedEventArgs e)
+		{
+			ListView listView = sender as ListView;
+			GridView gridView = listView.View as GridView;
+
+			var actualWidth = listView.ActualWidth - SystemParameters.VerticalScrollBarWidth - 10;
+
+			for (int i = 0; i < gridView.Columns.Count - 1; i++)
+			{
+				actualWidth -= gridView.Columns[i].ActualWidth;
+			}
+
+			gridView.Columns[gridView.Columns.Count - 1].Width = actualWidth;
+		}
+
+		private async void btnLoadFormats_Click(object sender, RoutedEventArgs e)
+		{
+			if (!string.IsNullOrEmpty(txtInput.Text))
+			{
+				outputManager.Append(new OutputMessage() { Text = "Loading available formats..." });
+
+				lstFormats.ItemsSource = await youtubeDLManager.GetFormats(txtInput.Text);
+			}
+		}
+
+		private async void btnDownload_Click(object sender, RoutedEventArgs e)
+		{
+			if (lstFormats.SelectedItems.Count > 0)
+			{
+				outputManager.Append(new OutputMessage() { Text = "Downloading selected items..." });
+
+				List<YoutubeDLFormat> selectedFormats = new List<YoutubeDLFormat>();
+
+				foreach (var item in lstFormats.SelectedItems)
+				{
+					selectedFormats.Add((YoutubeDLFormat)item);
+				}
+
+				await youtubeDLManager.Download(txtInput.Text, txtOutputDir.Text, selectedFormats);
+			}
 		}
 
 		#endregion
